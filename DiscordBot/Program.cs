@@ -3,7 +3,6 @@ using Discord.WebSocket;
 
 using DiscordBot.Domain.Abstractions;
 using DiscordBot.Domain.Configuration;
-using DiscordBot.Modules.ReactionModules;
 using DiscordBot.Modules.Services;
 using DiscordBot.Modules.Utils.ReactionBase;
 using DiscordBot.Services;
@@ -15,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 
 using System;
 using System.IO;
+using System.Net.Http;
 
 namespace DiscordBot
 {
@@ -22,49 +22,55 @@ namespace DiscordBot
     {
         public static void Main(string[] args)
         {
-            CreateHostBuilder(args).Build().Run();
+            var host = Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration(GetConfiguration)
+                .ConfigureServices(ConfigureServices)
+                .Build();
+
+            //System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += ctx =>
+            //{
+            //    host.StopAsync().Wait();
+            //};
+
+            host.Run();
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureAppConfiguration(builder =>
-                {
-                    var environmentName = Environment.GetEnvironmentVariable("Environment");
+        private static void GetConfiguration(IConfigurationBuilder builder)
+        {
+            var environmentName = Environment.GetEnvironmentVariable("Environment");
 
-                    builder.SetBasePath(Directory.GetCurrentDirectory())
-                        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                        .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true)
-                        .AddEnvironmentVariables();
-                })
-                .ConfigureServices((hostContext, services) =>
-                {
-                    var reactionRegistry = new ReactionModuleRegistry(services);
-                    // .Register<ReactionTestModule>();
+            builder.SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables();
+        }
 
-                    services
-                        .AddOptions()
-                        .AddHttpClient()
+        private static void ConfigureServices(HostBuilderContext hostContext, IServiceCollection services)
+        {
+            services.AddOptions()
+                .AddHttpClient()
+                .AddTransient<HttpClient>(x => x.GetService<IHttpClientFactory>().CreateClient("default"))
+                .AddReactionModules()
 
-                        .AddSingleton<DiscordSocketClient>()
-                        .AddSingleton<CommandService, InjectableCommandService>()
-                        .AddSingleton<CommandHandlingService>()
-                        .AddSingleton<DiscordLoggingService>()
-                        .AddSingleton<ReactionModuleRegistry>(reactionRegistry)
-                        .AddScoped<IWeatherService, WeatherService>()
-                        .AddScoped<ICatService, CatService>()
-                        .AddSingleton<MinecraftService>()
-                        .AddScoped<ReactionTestModule>()
-                        ;
+                .AddSingleton<DiscordSocketClient>()
+                .AddSingleton<CommandService, InjectableCommandService>()
+                .AddSingleton<CommandHandlingService>()
+                .AddSingleton<DiscordLoggingService>()
 
-                    services.Configure<DiscordSettings>(hostContext.Configuration.GetSection("Discord"));
-                    services.Configure<ImgurSettings>(hostContext.Configuration.GetSection("Imgur"));
-                    services.Configure<MinecraftSettings>(hostContext.Configuration.GetSection("Minecraft"));
+                .AddScoped<IWeatherService, WeatherService>()
+                .AddScoped<ICatService, CatService>()
+                .AddSingleton<MinecraftService>();
 
-                    services.AddApplicationInsightsTelemetryWorkerService();
+            services.Configure<DiscordSettings>(hostContext.Configuration.GetSection("Discord"));
+            services.Configure<ImgurSettings>(hostContext.Configuration.GetSection("Imgur"));
+            services.Configure<MinecraftSettings>(hostContext.Configuration.GetSection("Minecraft"));
+            services.Configure<JawgSettings>(hostContext.Configuration.GetSection("Jawg"));
 
-                    services.Configure<CommandServiceConfig>(hostContext.Configuration.GetSection("Discord:CommandService"));
+            services.AddApplicationInsightsTelemetryWorkerService();
 
-                    services.AddHostedService<BotService>();
-                });
+            services.Configure<CommandServiceConfig>(hostContext.Configuration.GetSection("Discord:CommandService"));
+
+            services.AddHostedService<BotService>();
+        }
     }
 }
