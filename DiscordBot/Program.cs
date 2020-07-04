@@ -15,25 +15,17 @@ using Microsoft.Extensions.Hosting;
 using System;
 using System.IO;
 using System.Net.Http;
+using DiscordBot.Domain.CoderDojoInfoModule.Configuration;
+using DiscordBot.Domain.CoderDojoInfoModule.ServicesImpl;
 
 namespace DiscordBot
 {
     internal class Program
     {
-        public static void Main(string[] args)
-        {
-            var host = Host.CreateDefaultBuilder(args)
+        public static void Main(string[] args) => Host.CreateDefaultBuilder(args)
                 .ConfigureAppConfiguration(GetConfiguration)
                 .ConfigureServices(ConfigureServices)
-                .Build();
-
-            //System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += ctx =>
-            //{
-            //    host.StopAsync().Wait();
-            //};
-
-            host.Run();
-        }
+                .Build().Run();
 
         private static void GetConfiguration(IConfigurationBuilder builder)
         {
@@ -55,16 +47,21 @@ namespace DiscordBot
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton<CommandService, InjectableCommandService>()
                 .AddSingleton<CommandHandlingService>()
+                .AddSingleton<CommandSuggestionsService>()
                 .AddSingleton<DiscordLoggingService>()
 
                 .AddScoped<IWeatherService, WeatherService>()
                 .AddScoped<ICatService, CatService>()
-                .AddSingleton<MinecraftService>();
+                .AddSingleton<MinecraftService>()
+                .AddTransient<MapBoxStaticMapService>()
+                .AddScoped<ICoderDojoAppointmentReaderService, CoderDojoAppointmentReaderService>();
 
             services.Configure<DiscordSettings>(hostContext.Configuration.GetSection("Discord"));
             services.Configure<ImgurSettings>(hostContext.Configuration.GetSection("Imgur"));
             services.Configure<MinecraftSettings>(hostContext.Configuration.GetSection("Minecraft"));
-            services.Configure<JawgSettings>(hostContext.Configuration.GetSection("Jawg"));
+            services.Configure<JawgSettings>(hostContext.Configuration.GetSection("MapServices:Jawg"));
+            services.Configure<MapBoxSettings>(hostContext.Configuration.GetSection("MapServices:MapBox"));
+            services.Configure<CDAppointmentSettings>(hostContext.Configuration.GetSection("CoderDojoAppointments"));
 
             services.AddApplicationInsightsTelemetryWorkerService();
 
